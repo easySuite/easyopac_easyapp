@@ -1,0 +1,9 @@
+name = easyOPAC EasyApp
+description = 'Enables and configuring Domain module for App usage.'
+core = 7.x
+package = easyOPAC
+dependencies[] = domain
+dependencies[] = domain_conf
+dependencies[] = domain_settings
+dependencies[] = domain_theme
+dependencies[] = domain_views

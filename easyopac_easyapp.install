@@ -1,0 +1,110 @@
+<?php
+
+/**
+ * @file
+ * easyOPAC easyapp module install.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function easyopac_easyapp_install() {
+  global $base_url;
+
+  // 1. Enable Domain infrastructure modules.
+  $modules = [
+    'domain',
+    'domain_conf',
+    'domain_settings',
+    'domain_theme',
+    'domain_views',
+  ];
+
+  try {
+    module_enable($modules);
+  }
+  catch (\Exception $exception) {
+    watchdog_exception('easyopac_easyapp', $exception);
+  }
+
+  // 2. Enable theme.
+  $active_themes = ['ddbasic', 'easyopac_app_theme'];
+  theme_enable($active_themes);
+
+  // 3. Configure base domain settings.
+  $domains = domain_domains();
+  $parsed_url = parse_url($base_url);
+
+  $domain = reset($domains);
+  // Update the machine_name for the main domain.
+  $domain['machine_name'] = 'easyopac';
+
+  $clean_domains[1] = $domain;
+  $new = $domain;
+  unset($new['domain_id']);
+  $new['subdomain'] = 'app.' . $new['subdomain'];
+  $new['weight'] = '1';
+  $new['is_default'] = '0';
+  $new['machine_name'] = 'easyopac_app';
+  $new['path'] = $parsed_url['scheme'] . '://app.' . $parsed_url['host'] . '/';
+
+  $clean_domains[2] = $new;
+
+  foreach ($clean_domains as $clear_domain) {
+    domain_save($clear_domain);
+  }
+
+  // 4. Set domain themes.
+  $domain_theme = [
+    '1' => 'ddbasic',
+    '2' => 'easyopac_app_theme',
+  ];
+
+  foreach ($domain_theme as $id => $item) {
+    db_insert('domain_theme')
+      ->fields([
+        'domain_id' => $id,
+        'theme' => $item,
+        'status' => 1,
+      ])
+      ->execute();
+  }
+
+  // 5. Domains default settings.
+  // 5.1 Set general settings.
+  variable_set('domain_edit_on_primary', FALSE);
+  variable_set('domain_force_admin', FALSE);
+  variable_set('domain_sitename_override', FALSE);
+
+  // 5.2 Set content defaults.
+  $node_types = node_type_get_types();
+  $node_types = array_keys($node_types);
+  $defaults = [
+    DOMAIN_ALL => DOMAIN_ALL,
+    'easyopac' => 'easyopac',
+    'easyopac_app' => 'easyopac_app',
+    DOMAIN_ACTIVE => 0,
+  ];
+
+  foreach ($node_types as $type) {
+    variable_set('domain_node_' . $type, $defaults);
+  }
+
+  // 6. Set all nodes available from all domains.
+  $nodes = db_select('node', 'n')
+    ->fields('n', ['nid'])
+    ->execute()
+    ->fetchCol();
+
+  foreach ($nodes as $nid) {
+    db_insert('domain_access')
+      ->fields([
+        'nid' => $nid,
+        'gid' => 2,
+        'realm' => 'domain_id',
+      ])
+      ->execute();
+  }
+
+  cache_clear_all();
+}
