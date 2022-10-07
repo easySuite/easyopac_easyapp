@@ -27,9 +27,6 @@
           else if (prevUrl && direction === "right") {
             window.location = prevUrl;
           }
-          else if (direction === "down") {
-            window.location.reload();
-          }
         },
       });
     }
