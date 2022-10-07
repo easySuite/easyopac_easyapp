@@ -1,5 +1,86 @@
 <?php
 /**
  * @file
- * Drupal needs this blank file.
+ * easyOPAC easyAPP module.
  */
+
+/**
+ * Implements hook_node_view().
+ */
+function easyopac_easyapp_node_view($node, $view_mode, $langcode) {
+  if (!_easyopac_easyapp_is_app_domain()) {
+    return;
+  }
+  $type = $node->type;
+
+  if (!in_array($type, ['ding_news', 'ding_event'])) {
+    return;
+  }
+
+  if ($view_mode === 'full') {
+    $field = "field_{$type}_category";
+    $active_category = $node->$field[LANGUAGE_NONE][0]['tid'];
+
+    // Get nodes attached to current node's category.
+    $nodes = taxonomy_select_nodes($active_category);
+
+    // Filter passed events.
+    if ($type === 'ding_event') {
+      $query = db_select('node', 'n')->fields('n', ['nid']);
+      $query->join('field_data_field_ding_event_date', 'ed', 'ed.entity_id=n.nid');
+      $query->condition('nid', $nodes, 'IN');
+      $query->condition('field_ding_event_date_value', date('Y-m-d'), '>=');
+      $query->orderBy('field_ding_event_date_value');
+      $nodes = $query->execute()->fetchCol('nid');
+    }
+
+    // Get current node position in array.
+    $nid_key_array = array_flip($nodes);
+    $node_pos = $nid_key_array[$node->nid];
+
+    if ($node_pos - 1 >= 0) {
+      $prev_meta_markup = [
+        '#type' => 'html_tag',
+        '#tag' => 'meta',
+        '#attributes' => [
+          'name' => 'easyapp:prev',
+          'content' => url('node/' . $nodes[$node_pos - 1], ['absolute' => TRUE]),
+        ],
+      ];
+      drupal_add_html_head($prev_meta_markup, 'easyapp:prev');
+    }
+
+    if (!empty($nodes[$node_pos + 1])) {
+      $next_meta_markup = [
+        '#type' => 'html_tag',
+        '#tag' => 'meta',
+        '#attributes' => [
+          'name' => 'easyapp:next',
+          'content' => url('node/' . $nodes[$node_pos + 1], ['absolute' => TRUE]),
+        ],
+      ];
+
+      drupal_add_html_head($next_meta_markup, 'easyapp:next');
+    }
+
+    drupal_add_js('https://cdnjs.cloudflare.com/ajax/libs/jquery.touchswipe/1.6.19/jquery.touchSwipe.min.js', [
+      'type' => 'external',
+      'weight' => -100,
+    ]);
+    drupal_add_js(drupal_get_path('module', 'easyopac_easyapp') . '/js/easyopac_easyapp.js', [
+      'weight' => -100,
+    ]);
+
+    drupal_add_css(drupal_get_path('module', 'easyopac_easyapp') . '/css/easyopac_easyapp.css');
+  }
+}
+
+/**
+ * Determine if on the app domain.
+ *
+ * @return bool
+ */
+function _easyopac_easyapp_is_app_domain() {
+  $domain = domain_get_domain();
+  return $domain['machine_name'] === 'easyopac_app';
+}
